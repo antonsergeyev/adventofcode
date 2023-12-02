@@ -34,6 +34,7 @@ fn get_line_value(s: &str) -> u32 {
         });
         if let Some(word_index) = word_position {
             digits.push(word_index as u32 + 1);
+            // TODO skip the following WORDS2DIGITS[word_index].len() symbols
         }
     }
 
