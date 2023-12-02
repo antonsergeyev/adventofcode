@@ -7,8 +7,12 @@ fn main() {
         .expect("path is required: cargo run -- src/input.txt");
     let input = fs::read_to_string(path).expect("could not read file");
     let games = parse_games(input.as_str());
-    let ids = ids_of_possible_games(games, 12, 13, 14);
-    println!("{}", ids.iter().sum::<u32>());
+    let ids = ids_of_possible_games(&games, 12, 13, 14);
+    println!("Sum of IDs of possible games: {}", ids.iter().sum::<u32>());
+
+    let powers_sum: u32 = games.iter().
+        map(|game| game.min_set_of_cubes().power()).sum();
+    println!("Sum of the powers of minimum sets of cubes: {}", powers_sum);
 }
 
 #[derive(Debug)]
@@ -17,11 +21,11 @@ struct ParseError;
 #[derive(Debug)]
 struct Game {
     id: u32,
-    rounds: Vec<Round>
+    rounds: Vec<CubeSet>
 }
 
 #[derive(Debug)]
-struct Round {
+struct CubeSet {
     blue: u32,
     red: u32,
     green: u32
@@ -31,7 +35,7 @@ fn parse_games(s: &str) -> Vec<Game> {
     s.lines().map(|line| Game::from_str(line).unwrap()).collect()
 }
 
-fn ids_of_possible_games(games: Vec<Game>, red: u32, green: u32, blue: u32) -> Vec<u32> {
+fn ids_of_possible_games(games: &Vec<Game>, red: u32, green: u32, blue: u32) -> Vec<u32> {
     games.iter().filter(|game| {
         game.rounds.iter().all(|round| {
             round.blue <= blue && round.green <= green && round.red <= red
@@ -39,11 +43,27 @@ fn ids_of_possible_games(games: Vec<Game>, red: u32, green: u32, blue: u32) -> V
     }).map(|game| game.id).collect()
 }
 
-impl FromStr for Round {
+impl Game {
+    fn min_set_of_cubes(&self) -> CubeSet {
+        CubeSet{
+            blue: self.rounds.iter().map(|r| r.blue).max().unwrap(), 
+            green: self.rounds.iter().map(|r| r.green).max().unwrap(), 
+            red: self.rounds.iter().map(|r| r.red).max().unwrap()
+        }
+    }
+}
+
+impl CubeSet {
+    fn power(&self) -> u32 {
+        self.blue * self.red * self.green
+    }
+}
+
+impl FromStr for CubeSet {
     type Err = ParseError;
     
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut round = Round{blue: 0, red: 0, green: 0};
+        let mut round = CubeSet{blue: 0, red: 0, green: 0};
 
         for color_str  in s.split(",") {
             let mut count_and_color = color_str.trim().split(" ");
@@ -76,7 +96,7 @@ impl FromStr for Game {
         let mut game = Game { id: id, rounds: Vec::new() };
 
         for round_str in parts.next().ok_or(ParseError)?.split(";") {
-            game.rounds.push(Round::from_str(round_str)?);
+            game.rounds.push(CubeSet::from_str(round_str)?);
         }
 
         Ok(game)
@@ -98,6 +118,13 @@ mod tests {
         assert_eq!(6, game.rounds[1].blue);
         assert_eq!(1, game.rounds[1].red);
         assert_eq!(2, game.rounds[1].green);
+
+        let min_set = game.min_set_of_cubes();
+        assert_eq!(4, min_set.red);
+        assert_eq!(2, min_set.green);
+        assert_eq!(6, min_set.blue);
+
+        assert_eq!(48, min_set.power());
     }
 
     #[test]
@@ -113,7 +140,7 @@ mod tests {
         Game 3: 8 green, 6 blue, 20 red; 5 blue, 4 red, 13 green; 5 green, 1 red
         Game 4: 1 green, 3 red, 6 blue; 3 green, 6 red; 3 green, 15 blue, 14 red
         Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green");
-        let ids = ids_of_possible_games(games, 12, 13, 14);
+        let ids = ids_of_possible_games(&games, 12, 13, 14);
         assert_eq!(vec![1,2,5], ids);
     }
 }
