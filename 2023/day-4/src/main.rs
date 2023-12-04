@@ -48,23 +48,12 @@ fn count_cards(s: &str) -> u32 {
     for (i, line) in s.lines().enumerate() {
         let card = parse_card(line);
 
-        let mut next_copies_count = 1;
-
-        match copies.entry(i) {
-            Entry::Occupied(mut entry) => {
-                *entry.get_mut() += 1;
-                println!("inserting card {} times {}", i+1, *entry.get());
-                next_copies_count = *entry.get();
-            },
-            Entry::Vacant(entry) => {
-                entry.insert(1);
-            }
-        }
+        let next_copies_count = *copies.entry(i).and_modify(|v| *v += 1).or_insert(1);
         
         for next_card in i+1..i + card.get_matches().len() + 1 {
-            let _ = *copies.entry(next_card).
-                    and_modify(|v| *v = *v + next_copies_count).
-                    or_insert(next_copies_count);
+            copies.entry(next_card).
+                and_modify(|v| *v = *v + next_copies_count).
+                or_insert(next_copies_count);
         }
     }
 
