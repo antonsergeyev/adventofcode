@@ -6,19 +6,19 @@ fn main() {
     let ways_to_win_1 = ways_to_win_in_races(parse_races(input));
     println!("Part 1: {}", ways_to_win_1);
 
-    let input2 = "Time:      71530
-    Distance:  940200";
-    let race = parse_races(input2)[0];
-    println!("Part 2: {}", ways_to_win(race.0 as f64, race.1 as f64));
+    let input2 = "Time:        63789468
+    Distance:   411127420471035";
+    let ways_to_win_2 = ways_to_win_in_races(parse_races(input2));
+    println!("Part 2: {}", ways_to_win_2);
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Race(i32, i32);
+struct Race(i64, i64);
 
 fn parse_races(s: &str) -> Vec<Race> {
     let mut lines = s.lines();
-    let times: Vec<i32> = lines.next().unwrap().split(":").nth(1).unwrap().split_whitespace().map(|t| t.trim().parse().unwrap()).collect();
-    let distances: Vec<i32> = lines.next().unwrap().split(":").nth(1).unwrap().split_whitespace().map(|t| t.trim().parse().unwrap()).collect();
+    let times: Vec<i64> = lines.next().unwrap().split(":").nth(1).unwrap().split_whitespace().map(|t| t.trim().parse().unwrap()).collect();
+    let distances: Vec<i64> = lines.next().unwrap().split(":").nth(1).unwrap().split_whitespace().map(|t| t.trim().parse().unwrap()).collect();
 
     times.into_iter().zip(distances.into_iter()).map(|pair| Race(pair.0, pair.1) ).collect()
 }
@@ -32,7 +32,7 @@ fn parse_races(s: &str) -> Vec<Race> {
 // tth = speed = 3, time left = 7-3 = 4, distance = 4*3 = 12
 // tth = speed = 4, time left = 7-4 = 3, distance = 3*4 = 12
 // tth = speed = 5, time left = 7-5 = 2, distance = 2*5 = 10
-fn get_hold_duration_range_above_record(time: i32, record_distance: i32) -> (f64, f64) {
+fn get_hold_duration_range_above_record(time: i64, record_distance: i64) -> (f64, f64) {
     // let x = time to hold = speed = 1, y = distance = (time - speed) * speed
 
     // ax^2+bx+c=y
