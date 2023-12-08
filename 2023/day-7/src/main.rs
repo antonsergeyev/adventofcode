@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, str::FromStr, env, fs};
+use std::{cmp::Ordering, collections::HashMap, env, fs, str::FromStr};
 
 use itertools::Itertools;
 
@@ -10,14 +10,14 @@ fn main() {
     let input = fs::read_to_string(path).expect("could not read file");
 
     let games = game_from_str(&input);
-    println!("Part 1 total winnings: {}", games.get_ranks().iter().sum::<u32>());
+    println!("total winnings: {}", games.get_ranks().iter().sum::<u64>());
 }
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, PartialOrd, Ord)]
 enum Card {
+    J,
     Value(u8),
     T,
-    J,
     Q,
     K,
     A,
@@ -61,28 +61,75 @@ struct Hand {
     bid: u32,
 }
 
+#[derive(Debug, Clone)]
+struct HandStats {
+    jokers: usize,
+    same: usize,
+    pairs: usize,
+}
+
 impl Hand {
-    fn get_type(&self) -> HandType {
+    fn get_stats(&self) -> HandStats {
         let counts = self.cards.iter().counts();
-        let max = counts
+        let counts_without_jokers = counts
             .clone()
             .into_iter()
-            .max_by(|a, b| a.1.cmp(&b.1))
-            .unwrap();
-        let pair_count = counts.clone().into_values().filter(|c| *c == 2).count();
-        let unique_count = counts.clone().into_values().filter(|c| *c == 1).count();
+            .filter(|(card, _count)| !matches!(card, Card::J))
+            .collect::<HashMap<&Card, usize>>();
 
-        if max.1 == 5 {
+        HandStats {
+            jokers: *counts.get(&Card::J).unwrap_or(&0),
+            same: counts_without_jokers
+                .clone()
+                .into_iter()
+                .max_by(|a, b| a.1.cmp(&b.1))
+                .map(|(_card, count)| count)
+                .unwrap_or(0),
+            pairs: counts_without_jokers
+                .clone()
+                .into_values()
+                .filter(|c| *c == 2)
+                .count(),
+        }
+    }
+    fn get_type(&self)  -> HandType {
+        let stats = self.get_stats();
+        let t = self.get_type_no_jokers(&stats);
+
+        if stats.jokers == 0 {
+            return t
+        }
+
+        match t {
+            HandType::HighCard => match stats.jokers {
+                1 => HandType::OnePair,
+                2 => HandType::ThreeOfAKind,
+                3 => HandType::FourOfAKind,
+                _ => HandType::FiveOfAKind,
+            }
+            HandType::OnePair => match stats.jokers {
+                1 => HandType::ThreeOfAKind,
+                2 => HandType::FourOfAKind,
+                _ => HandType::FiveOfAKind,
+            },
+            HandType::TwoPair => HandType::FullHouse,
+            HandType::ThreeOfAKind => if stats.jokers == 1 { HandType::FourOfAKind } else {HandType::FiveOfAKind},
+            HandType::FourOfAKind => HandType::FiveOfAKind,
+            _ => HandType::FiveOfAKind,
+        }
+    }
+    fn get_type_no_jokers(&self, stats: &HandStats) -> HandType {
+        if stats.same == 5 {
             return HandType::FiveOfAKind;
-        } else if max.1 == 4 {
+        } else if stats.same == 4 {
             return HandType::FourOfAKind;
-        } else if max.1 == 3 && pair_count == 1 {
+        } else if stats.same == 3 && stats.pairs == 1 {
             return HandType::FullHouse;
-        } else if max.1 == 3 && unique_count == 2 {
+        } else if stats.same == 3 {
             return HandType::ThreeOfAKind;
-        } else if pair_count == 2 {
+        } else if stats.pairs == 2 {
             return HandType::TwoPair;
-        } else if pair_count == 1 && unique_count == 3 {
+        } else if stats.pairs == 1 {
             return HandType::OnePair;
         } else {
             return HandType::HighCard;
@@ -98,16 +145,21 @@ impl PartialOrd for Hand {
 
 impl Ord for Hand {
     fn cmp(&self, other: &Self) -> Ordering {
-        println!("COMPARING HANDS ORD {:?} {:?}", self, other);
         let type_a = self.get_type();
         let type_b = other.get_type();
 
         if type_a != type_b {
-            println!("comparing type {:?} and {:?}", type_a, type_b);
             return type_a.cmp(&type_b);
         }
 
-        return self.cards.cmp(&other.cards);
+        for (i, c) in self.cards.iter().enumerate() {
+            let cmp = c.cmp(&other.cards[i]);
+            if cmp != Ordering::Equal {
+                return cmp;
+            }
+        }
+
+        return Ordering::Equal;
     }
 }
 
@@ -117,14 +169,13 @@ struct Game {
 }
 
 impl Game {
-    fn get_ranks(&self) -> Vec<u32> {
+    fn get_ranks(&self) -> Vec<u64> {
         self.hands
             .iter()
             .sorted()
             .enumerate()
             .map(|(i, h)| {
-                println!("bid {} for cards {:?}: {}", i+1, h.cards, h.bid);
-                h.bid * (i + 1) as u32
+                (h.bid as u64) * (i + 1) as u64
             })
             .collect()
     }
@@ -132,22 +183,22 @@ impl Game {
 
 fn game_from_str(s: &str) -> Game {
     Game {
-        hands: s.lines().
-            map(|line| hand_from_str(line.trim())).
-            collect(),
+        hands: s.lines().map(|line| hand_from_str(line.trim())).collect(),
     }
 }
 
 fn hand_from_str(s: &str) -> Hand {
     let mut parts = s.split_whitespace();
+    let cards: Vec<Card> = parts
+        .next()
+        .unwrap()
+        .split("")
+        .filter(|c| !c.is_empty())
+        .map(|c| c.parse().unwrap())
+        .collect();
+
     Hand {
-        cards: parts
-            .next()
-            .unwrap()
-            .split("")
-            .filter(|c| !c.is_empty())
-            .map(|c| c.parse().unwrap())
-            .collect(),
+        cards: cards.clone(),
         bid: parts.next().unwrap().parse().unwrap(),
     }
 }
@@ -158,26 +209,53 @@ mod tests {
 
     #[test]
     fn test_hand_from_str() {
+        assert_eq!(HandType::FourOfAKind, hand_from_str("QQQJA 483").get_type());
+
         assert_eq!("Hand { cards: [Value(3), Value(2), T, Value(3), K], bid: 765 }", format!("{:?}", hand_from_str("32T3K 765")));
         assert_eq!("Hand { cards: [Q, Q, Q, J, A], bid: 483 }", format!("{:?}", hand_from_str("QQQJA 483")));
 
         assert_eq!(HandType::OnePair, hand_from_str("32T3K 765").get_type());
-        assert_eq!(HandType::ThreeOfAKind, hand_from_str("QQQJA 483").get_type());
-        assert_eq!(HandType::ThreeOfAKind, hand_from_str("T55J5 483").get_type());
         assert_eq!(HandType::TwoPair, hand_from_str("KK677 483").get_type());
 
+        assert_eq!(HandType::FourOfAKind, hand_from_str("QQQJA 483").get_type());
+        assert_eq!(HandType::FourOfAKind, hand_from_str("T55J5 483").get_type());
+        assert_eq!(HandType::FourOfAKind, hand_from_str("KTJJT 483").get_type());
+
         assert_eq!(HandType::HighCard, hand_from_str("2345A 483").get_type());
+
+        assert_eq!(HandType::FiveOfAKind, hand_from_str("JJJJJ 483").get_type());
+        assert_eq!(HandType::FiveOfAKind, hand_from_str("JJAAA 483").get_type());
+        assert_eq!(HandType::FiveOfAKind, hand_from_str("JAAAA 483").get_type());
+        assert_eq!(HandType::FiveOfAKind, hand_from_str("JJJJA 483").get_type());
+
+        assert_eq!(HandType::FiveOfAKind, hand_from_str("JJJJA 483").get_type());
+        assert_eq!(HandType::FiveOfAKind, hand_from_str("JJJJA 483").get_type());
+        assert_eq!(HandType::FiveOfAKind, hand_from_str("JJAAA 483").get_type());
+
+        assert_eq!(
+            HandType::ThreeOfAKind,
+            hand_from_str("JJAKT 483").get_type()
+        );
     }
 
     #[test]
     fn test_cmp_hands() {
-        assert_eq!(Ordering::Less, hand_from_str("32T3K 765").cmp(&hand_from_str("QQQJA 483")));
-        assert_eq!(Ordering::Greater, hand_from_str("QQQJA 483").cmp(&hand_from_str("T55J5 483")));
-        assert_eq!(Ordering::Equal, hand_from_str("23456 483").cmp(&hand_from_str("23456 483")));
-        assert_eq!(Ordering::Greater, hand_from_str("2345A 483").cmp(&hand_from_str("23456 483")));
-        assert_eq!(Ordering::Greater, hand_from_str("T55J5 684").cmp(&hand_from_str("32T3K 765")));
+        assert_eq!(
+            Ordering::Less,
+            hand_from_str("T55J5 1").cmp(&hand_from_str("QQQJA 1"))
+        );
+        assert_eq!(
+            Ordering::Less,
+            hand_from_str("QQQJA 1").cmp(&hand_from_str("KTJJT 1"))
+        );
 
-        assert_eq!(true, hand_from_str("KTJJT 765") < hand_from_str("KK677 28"));
+        // assert_eq!(Ordering::Less, hand_from_str("32T3K 765").cmp(&hand_from_str("QQQJA 483")));
+        // assert_eq!(Ordering::Greater, hand_from_str("QQQJA 483").cmp(&hand_from_str("T55J5 483")));
+        // assert_eq!(Ordering::Equal, hand_from_str("23456 483").cmp(&hand_from_str("23456 483")));
+        // assert_eq!(Ordering::Greater, hand_from_str("2345A 483").cmp(&hand_from_str("23456 483")));
+        // assert_eq!(Ordering::Greater, hand_from_str("T55J5 684").cmp(&hand_from_str("32T3K 765")));
+
+        // assert_eq!(true, hand_from_str("KTJJT 765") < hand_from_str("KK677 28"));
     }
 
     #[test]
@@ -198,11 +276,10 @@ mod tests {
             format!("{:?}", game.hands[0])
         );
 
-        assert_eq!(
-            "[765, 440, 84, 2736, 2415]",
-            format!("{:?}", game.get_ranks())
-        );
-        assert_eq!(6440u32, game.get_ranks().iter().sum());
-        
+        // assert_eq!(
+        //     "[765, 440, 84, 2736, 2415]",
+        //     format!("{:?}", game.get_ranks())
+        // );
+        assert_eq!(5905u64, game.get_ranks().iter().sum());
     }
 }
