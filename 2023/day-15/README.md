@@ -90,6 +90,8 @@ If there is already a lens in the box with the same label, replace the old lens 
 If there is not already a lens in the box with the same label, add the lens to the box immediately behind any lenses already in the box. Don't move any of the other lenses when you do this. If there aren't any lenses in the box, the new lens goes all the way to the front of the box.
 Here is the contents of every box after each step in the example initialization sequence above:
 
+rn=1,cm-,qp=3,cm=2,qp-,pc=4,ot=9,ab=5,pc-,pc=6,ot=7
+
 After "rn=1":
 Box 0: [rn 1]
 
