@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fs};
+use std::{fs};
 
 fn main() {
     let input = fs::read_to_string("./src/input.txt").expect("could not read file");
