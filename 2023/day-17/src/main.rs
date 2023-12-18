@@ -1,4 +1,4 @@
-use pathfinding::{directed::astar::astar_bag, prelude::astar};
+use pathfinding::{directed::{astar::astar_bag, idastar::idastar}, prelude::astar};
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -9,8 +9,18 @@ use std::{
 fn main() {
     let input = fs::read_to_string("./src/input.txt").expect("could not read file");
     let grid = game_from_str(&input);
-    let cost = grid.get_best_path_cost();
-    println!("{}", cost);
+
+    let mut costs = Vec::new();
+
+    // this is a hack, and none of the multipliers actually work :(
+    for i in 400..=550 {
+        let mult = i as f32 * 0.009;
+        let cost = grid.get_best_path_cost(mult);
+        costs.push(cost);
+        println!("Cost with distance multiplier {}: {}", mult, cost);
+    }
+    
+    println!("Min cost: {}", costs.iter().min().unwrap());
 }
 
 fn game_from_str(s: &str) -> Game {
@@ -33,7 +43,7 @@ struct Pos {
     col: usize,
 
     direction: Direction,
-    straight: usize,
+    straight_steps: usize,
     cost: usize,
 }
 
@@ -56,48 +66,34 @@ struct Game {
 }
 
 impl Game {
-    fn get_best_path_cost(&self) -> usize {
+    fn get_best_path_cost(&self, distance_mult: f32) -> usize {
         let goal = Pos {
             row: self.grid.len() - 1,
             col: self.grid[0].len() - 1,
-
             cost: *self.grid.last().unwrap().last().unwrap(),
             direction: Direction::Right,
-            straight: 1,
+            straight_steps: 1,
         };
-        // let mut visited: HashMap<(usize, usize), usize> = HashMap::new();
         let result = astar(
             &Pos {
                 row: 0,
                 col: 0,
                 cost: 0,
                 direction: Direction::None,
-                straight: 1,
+                straight_steps: 1,
             },
             |p| {
-                // let key = &(p.row, p.col);
-                // if visited.contains_key(key) {
-                //     if *visited.get(key).unwrap() < p.cost {
-                //         println!("current path is not optimal, skipping");
-                //         return vec![];
-                //     } else {
-                //         visited.insert(*key, p.cost);
-                //     }
-                // } else {
-                //     visited.insert(*key, p.cost);
-                // }
-
                 self.successors(p)
             },
-            |p| self.distance(p, &goal),
+            |p| (self.distance(p, &goal) as f32 * distance_mult).round() as u32,
             |p| p.row == goal.row && p.col == goal.col,
         );
 
         match result {
             Some((path, cost)) => {
-                for pos in path {
-                    println!("{:?} {} ", pos.direction, pos.cost)
-                }
+                // for pos in path {
+                //     println!("{:?} {} ", pos.direction, pos.cost)
+                // }
 
                 return cost as usize;
             }
@@ -110,8 +106,7 @@ impl Game {
     }
 
     fn successors(&self, p: &Pos) -> Vec<(Pos, u32)> {
-        self
-            .next_positions(p)
+        self.next_positions(p)
             .iter()
             .map(|pos| (*pos, pos.cost as u32))
             .collect()
@@ -122,13 +117,13 @@ impl Game {
 
         if pos.row > 0
             && pos.direction != Direction::Bottom
-            && (pos.direction != Direction::Top || pos.straight < 3)
+            && (pos.direction != Direction::Top || pos.straight_steps < 3)
         {
             result.push(Pos {
                 row: pos.row - 1,
                 direction: Direction::Top,
-                straight: if pos.direction == Direction::Top || pos.direction == Direction::None {
-                    pos.straight + 1
+                straight_steps: if pos.direction == Direction::Top || pos.direction == Direction::None {
+                    pos.straight_steps + 1
                 } else {
                     1
                 },
@@ -139,13 +134,13 @@ impl Game {
 
         if pos.col > 0
             && pos.direction != Direction::Right
-            && (pos.direction != Direction::Left || pos.straight < 3)
+            && (pos.direction != Direction::Left || pos.straight_steps < 3)
         {
             result.push(Pos {
                 col: pos.col - 1,
                 direction: Direction::Left,
-                straight: if pos.direction == Direction::Left || pos.direction == Direction::None {
-                    pos.straight + 1
+                straight_steps: if pos.direction == Direction::Left || pos.direction == Direction::None {
+                    pos.straight_steps + 1
                 } else {
                     1
                 },
@@ -156,14 +151,14 @@ impl Game {
 
         if pos.row < self.grid.len() - 1
             && pos.direction != Direction::Top
-            && (pos.direction != Direction::Bottom || pos.straight < 3)
+            && (pos.direction != Direction::Bottom || pos.straight_steps < 3)
         {
             result.push(Pos {
                 row: pos.row + 1,
                 direction: Direction::Bottom,
-                straight: if pos.direction == Direction::Bottom || pos.direction == Direction::None
+                straight_steps: if pos.direction == Direction::Bottom || pos.direction == Direction::None
                 {
-                    pos.straight + 1
+                    pos.straight_steps + 1
                 } else {
                     1
                 },
@@ -174,13 +169,13 @@ impl Game {
 
         if pos.col < self.grid[0].len() - 1
             && pos.direction != Direction::Left
-            && (pos.direction != Direction::Right || pos.straight < 3)
+            && (pos.direction != Direction::Right || pos.straight_steps < 3)
         {
             result.push(Pos {
-                col: self.grid[pos.row][pos.col + 1],
+                col: pos.col + 1,
                 direction: Direction::Right,
-                straight: if pos.direction == Direction::Right || pos.direction == Direction::None {
-                    pos.straight + 1
+                straight_steps: if pos.direction == Direction::Right || pos.direction == Direction::None {
+                    pos.straight_steps + 1
                 } else {
                     1
                 },
@@ -201,12 +196,13 @@ enum Direction {
     Right,
     None,
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_go() {
+    fn get_best_path_cost() {
         let grid = game_from_str(
             "2413432311323
         3215453535623
@@ -222,6 +218,6 @@ mod tests {
         2546548887735
         4322674655533",
         );
-        assert_eq!(102, grid.get_best_path_cost());
+        assert_eq!(102, grid.get_best_path_cost(3f32));
     }
 }
