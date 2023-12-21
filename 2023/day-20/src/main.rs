@@ -3,13 +3,9 @@ use std::{collections::HashMap, fs};
 fn main() {
     let input = fs::read_to_string("./src/input.txt").expect("could not read file");
     let m = modules_from_str(&input);
-    let (low, high) = press_n(m);
+    let (low, high) = press_button_a_thousand_times(m);
     println!("{} {} = {}", low, high, low * high);
 }
-
-// trait Module {
-//     fn propagate(&mut self, state: bool)
-// }
 
 #[derive(Debug, Clone, PartialEq)]
 enum Module {
@@ -40,10 +36,13 @@ impl Module {
                     return (Module::FlipFlop(m.clone()), false);
                 }
 
-                return (Module::FlipFlop(FlipFlop {
-                    value: !m.value,
-                    ..m.clone()
-                }), true);
+                return (
+                    Module::FlipFlop(FlipFlop {
+                        value: !m.value,
+                        ..m.clone()
+                    }),
+                    true,
+                );
             }
             Module::Conj(c) => {
                 let mut new_c = c.clone();
@@ -83,7 +82,13 @@ struct Broadcaster {
 fn targets_from_str(s: &str) -> (String, Vec<String>) {
     let mut parts = s.split("->");
     (
-        parts.next().unwrap().trim().trim_start_matches("%").trim_start_matches("&").to_owned(),
+        parts
+            .next()
+            .unwrap()
+            .trim()
+            .trim_start_matches("%")
+            .trim_start_matches("&")
+            .to_owned(),
         parts
             .next()
             .unwrap()
@@ -132,13 +137,15 @@ fn modules_from_str(s: &str) -> HashMap<String, Module> {
                 continue;
             }
 
-            let target = updated_hm.get_mut(&target_name).expect(&format!("key {} must exist", target_name));
+            let target = updated_hm
+                .get_mut(&target_name)
+                .expect(&format!("key {} must exist", target_name));
 
             match target {
                 Module::Conj(c) => {
                     c.inputs.insert(key.to_string(), false);
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
     }
@@ -146,35 +153,37 @@ fn modules_from_str(s: &str) -> HashMap<String, Module> {
     updated_hm
 }
 
-fn press_n(modules: HashMap<String, Module>) -> (usize, usize) {
+fn press_button_a_thousand_times(modules: HashMap<String, Module>) -> (usize, usize) {
     let mut m = modules.clone();
     let mut low = 0;
     let mut high = 0;
 
-    for i in 0..10000000 {
-        let (next_m, next_low, next_high, should_continue) = propagate(m, "broadcaster".to_string(), "broadcaster".to_string(), false);
-        if !should_continue {
-            panic!("{}", i);
-        }
+    for i in 0..1000 {
+        let (next_m, next_low, next_high) = propagate(
+            m,
+            "broadcaster".to_string(),
+            "broadcaster".to_string(),
+            false,
+        );
         m = next_m;
         low += next_low + 1;
         high += next_high;
     }
 
-    return (low, high)
+    return (low, high);
 }
 
 fn propagate(
-    modules: HashMap<String, Module>, 
-    source: String, 
-    module_name: String, 
-    signal: bool
-) -> (HashMap<String, Module>, usize, usize, bool) {
+    modules: HashMap<String, Module>,
+    source: String,
+    module_name: String,
+    signal: bool,
+) -> (HashMap<String, Module>, usize, usize) {
     let mut low = 0;
     let mut high = 0;
 
     if !modules.contains_key(&module_name) {
-        return (modules, low, high, signal == true);
+        return (modules, low, high);
     }
 
     let m = modules.get(&module_name).unwrap();
@@ -184,7 +193,7 @@ fn propagate(
     next_modules.insert(module_name.clone(), updated);
 
     if !should_continue {
-        return (next_modules, low, high, true)
+        return (next_modules, low, high);
     }
 
     for target in m.targets().iter() {
@@ -194,70 +203,20 @@ fn propagate(
             low += 1
         }
 
-        let (propagated_modules, prop_low, prop_high, should_continue) = propagate(
-            next_modules.clone(), 
-            module_name.clone(), 
-            target.clone(), 
-            updated_value
+        let (propagated_modules, prop_low, prop_high) = propagate(
+            next_modules.clone(),
+            module_name.clone(),
+            target.clone(),
+            updated_value,
         );
 
         low += prop_low;
         high += prop_high;
         next_modules.extend(propagated_modules);
-
-        if !should_continue {
-            return (next_modules, low, high, false);
-        }
     }
 
-    (next_modules, low, high, true)
+    (next_modules, low, high)
 }
-
-// fn send_low_pulse(
-//     modules: HashMap<String, Module>,
-// ) -> HashMap<String, bool> {
-//     propagate("broadcaster", modules, false)
-// }
-
-// fn propagate(
-//     module_name: &str,
-//     modules: HashMap<String, Module>,
-//     signal: bool,
-// ) -> HashMap<String, bool> {
-//     let module = modules.get(module_name).unwrap();
-//     println!("signal {} to {}", signal, module_name);
-
-//     match module {
-//         Module::Broadcaster(m) => {
-//             let mut new_state = states.clone();
-//             for target_name in m.targets.iter() {
-//                 new_state.extend(propagate(&target_name, states, modules, signal));
-//             }
-
-//             return new_state;
-//         }
-//         Module::FlipFlop(m) => {
-//             if signal == true {
-//                 return states;
-//             }
-
-//             let current_module_state = states.get(module_name).unwrap();
-//             let new_module_state = !current_module_state;
-
-//             let mut new_states = states.clone();
-
-//             return states;
-
-//             // let state = states.get(module_name).unwrap();
-//             // let mut new_state = states.clone();
-//             // new_state.insert(&module_name, v)
-//             // new_state.extend(propagate(&m.target, new_state, modules, signal));
-
-//             // return new_state
-//         }
-//         Module::Conj(m) => todo!(),
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -265,39 +224,49 @@ mod tests {
 
     #[test]
     fn test_modules_from_str() {
-        let m = modules_from_str("broadcaster -> a, b, c
+        let m = modules_from_str(
+            "broadcaster -> a, b, c
         %a -> b
         %b -> c
         %c -> inv
-        &inv -> a");
+        &inv -> a",
+        );
         assert_eq!(5, m.len());
         println!("{:?}", m);
     }
 
-
     #[test]
     fn test_press_n() {
-        let m = modules_from_str("broadcaster -> a, b, c
+        let m = modules_from_str(
+            "broadcaster -> a, b, c
         %a -> b
         %b -> c
         %c -> inv
-        &inv -> a");
-        let (low, high) = press_n(m);
+        &inv -> a",
+        );
+        let (low, high) = press_button_a_thousand_times(m);
         assert_eq!(4000, high);
         assert_eq!(8000, low);
     }
 
     #[test]
     fn test_propagate() {
-        let m = modules_from_str("broadcaster -> a, b, c
+        let m = modules_from_str(
+            "broadcaster -> a, b, c
         %a -> b
         %b -> c
         %c -> inv
-        &inv -> a");
-        let (m2, low, high) = propagate(m, "broadcaster".to_string(), "broadcaster".to_string(), false);
+        &inv -> a",
+        );
+        let (m2, low, high) = propagate(
+            m,
+            "broadcaster".to_string(),
+            "broadcaster".to_string(),
+            false,
+        );
         assert_eq!(5, m2.len());
         assert_eq!(4, high);
-        assert_eq!(8, low);
+        assert_eq!(7, low);
         println!("{:?}", m2);
     }
 
@@ -322,33 +291,4 @@ mod tests {
             format!("{:?}", inv)
         );
     }
-
-    // #[test]
-    // fn test_propagate() {
-    //     let mut modules: HashMap<String, Module> = HashMap::from([
-    //         (
-    //             "broadcaster".to_string(),
-    //             Module::Broadcaster(Broadcaster {
-    //                 targets: vec!["a".to_string()],
-    //             }),
-    //         ),
-    //         (
-    //             "a".to_string(),
-    //             Module::FlipFlop(FlipFlop {
-    //                 target: "b".to_string(),
-    //                 state: false,
-    //             }),
-    //         ),
-    //         (
-    //             "b".to_string(),
-    //             Module::FlipFlop(FlipFlop {
-    //                 target: "a".to_string(),
-    //                 state: false,
-    //             }),
-    //         ),
-    //     ]);
-    //     let s = System {};
-    //     let result = s.send_low_pulse(modules);
-    //     assert_eq!("", format!("{:?}", result));
-    // }
 }
