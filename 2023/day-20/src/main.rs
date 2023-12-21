@@ -15,6 +15,7 @@ enum Module {
 }
 
 impl Module {
+    // i know this is horrible, i should get better with rust
     fn targets(&self) -> Vec<String> {
         match self {
             Module::FlipFlop(m) => m.targets.clone(),
